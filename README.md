@@ -1,184 +1,235 @@
 # SecOps Terminal
 
-A navigational terminal UI for security operations engineers. Sits between a SIEM and a SOAR — does **not** replace either.
+A keyboard-driven terminal UI for SOC engineers that sits **between your SIEM and your SOAR** — it does not replace either.
 
-Pulls threat intel, fires retro hunts in Chronicle and Vision One, surfaces consolidated alert cards, runs YAML-defined playbooks, translates natural language to UDM Search / TMV1 Search queries, and exports IOCs as STIX 2.1 bundles.
+Connect it to Chronicle and/or Vision One, point it at your threat-intel feeds, and get a single pane of glass for pulling IOCs, triaging alerts, firing retro hunts, and running response playbooks — all from the terminal, all audit-logged.
 
-> **Status:** v0.6.0 — all six phases complete. See `DECISIONS.md` for the running design log.
+---
 
-## Feature summary
+## What it does
 
-| Phase | Features |
-|-------|----------|
-| 0 | Security primitives: Argon2id-Fernet keyring, hash-chained JSONL audit log, ACL-enforced data root, SSRF guard, URL allow-list, taint+redact registry |
-| 1 | Threat-intel pipeline: OTX, abuse.ch (4 sub-feeds), RSS/Atom + article scraping, IOC store (SQLite), provider registry, health checks |
-| 2 | Retro hunts: Chronicle UDM search, Vision One, retro-hunt worker + job queue, RetroHunts TUI screen |
-| 3 | Unified alerts: Chronicle + Vision One + Deep Security ingestion, normalize/dedup, Alerts TUI screen |
-| 4 | AI Bridge: headless Claude CLI transport, clipboard transport, optional MCP server (loopback + bearer + rate-limit), NLP → UDM / TMV1 query generation, Query TUI screen |
-| 5 | Playbooks: Pydantic schema, YAML loader, sandbox engine (retry/timeout/audit/dry-run), 3 notifiers (generic_json/slack/teams), Playbooks TUI screen |
-| 6 | Polish: VirusTotal + GreyNoise + AbuseIPDB + NVD intel providers, STIX 2.1 bundle export (`intel export --format stix`), PyInstaller distributable builds |
+### Threat intelligence
+- Pulls IOCs from **7 providers** in one command: AlienVault OTX, abuse.ch (ThreatFox / URLhaus / MalwareBazaar / Feodo Tracker), VirusTotal Intelligence, GreyNoise, AbuseIPDB, NVD CVEs, and any RSS/Atom feed
+- Stores everything in a local SQLite database — search, filter by type, and export at any time
+- Exports your entire IOC store (or a filtered subset) as a **STIX 2.1 bundle** for sharing with other tools
 
-## Hard rules
+### Alert triage
+- Ingests alerts from **Chronicle, Vision One, and Deep Security** in one pass
+- Deduplicates and normalises across sources so you see one card per incident, not three
+- Grouped view shows alert clusters by title + source + entity
 
-- **No environment variables for secrets or environment-specific URLs.** All sensitive values live in OS keyring (with an Argon2id-Fernet fallback). All non-secret config lives in `~/.secops-term/config.toml` with restrictive ACLs.
-- **Read-mostly by default.** Destructive actions require an explicit `allow_write` toggle plus an interactive confirm.
-- **Every input is adversarial.** Scraped content, RSS feeds, and AI bridge outputs never drive automated control flow.
-- **TLS always verified.** No `--insecure` flag exists.
-- **AI output is display-only.** AI-generated text never drives `when:` expressions or write-step parameters in playbooks (brief §7.5).
+### Retro hunts
+- Queue a retro hunt for any IOC with one command
+- Runs UDM Search (Chronicle) or Vision One queries in the background
+- Results surface in the TUI as they complete
 
-## Install (development)
+### Playbooks
+- Define response workflows in YAML — no code required
+- Steps support HTTP calls, CLI commands, retro hunts, and notifications
+- Dry-run mode, per-step timeouts, retry budgets, and full audit trail built in
+- Notify via **Slack**, **Teams**, or any webhook
 
-This project targets Python 3.11+. Recommended dev workflow uses [`uv`](https://docs.astral.sh/uv/).
+### AI-assisted queries
+- Describe what you want in plain English — get a UDM Search or TMV1 Search query back
+- Works with Claude via clipboard (no API key required), headless CLI, or MCP server
+- AI output is display-only; it never drives automated actions
+
+### TUI screens
+Navigate with single key presses:
+
+| Key | Screen | What you do there |
+|-----|--------|-------------------|
+| `d` | Dashboard | At-a-glance counts: IOCs, hunt queue, configured providers |
+| `i` | Intel | Browse and search the local IOC store |
+| `a` | Alerts | Triage ingested alerts, toggle grouped view |
+| `h` | Retro Hunts | Monitor the hunt queue, see hits and errors |
+| `p` | Playbooks | List, inspect, and run response playbooks |
+| `q` | Query | Natural-language → UDM / TMV1 query translation |
+| `c` | Config | Configured providers and live health checks |
+| `l` | Audit Log | Browse and verify the tamper-evident audit log |
+
+---
+
+## Install
 
 ```powershell
-# Clone, then from the repo root:
-uv venv
-.venv\Scripts\Activate.ps1            # Windows PowerShell
-uv pip install -e ".[dev]"
-uv pip compile pyproject.toml -o requirements.lock
+pip install secops-term
 ```
 
-On macOS / Linux:
-
-```bash
-uv venv
-source .venv/bin/activate
-uv pip install -e ".[dev]"
-uv pip compile pyproject.toml -o requirements.lock
-```
-
-## First run
-
-After install, the entry point is `secops-term`:
+Or from a wheel file:
 
 ```powershell
-secops-term --help
-secops-term doctor          # health checks across configured providers
-secops-term config          # interactive wizard (Chronicle, Vision One, Deep Security, intel, notifiers)
-secops-term audit verify    # walk the hash-chained audit log
-secops-term tui             # launch the Textual TUI
+pip install secops_term-0.6.0-py3-none-any.whl
 ```
 
-The first run creates `~/.secops-term/` with `0o600` (POSIX) / restricted-ACL (Windows) permissions. `doctor` refuses to start if those permissions are wrong.
+Or directly from the repository:
 
-## CLI surface
-
+```powershell
+pip install git+https://your-corp-git.example.com/secops/secops-term.git
 ```
-secops-term intel pull [--provider NAME] [--since YYYY-MM-DD]
-secops-term intel list [--type TYPE] [--limit N] [--search SUBSTR]
-secops-term intel export --format stix [--type TYPE] [--out FILE]
 
-secops-term alerts ingest [--provider chronicle|vision_one|deep_security]
+Requires Python 3.11 or later. No other setup needed.
 
-secops-term playbooks list
-secops-term playbooks show NAME
-secops-term playbooks init [--force]
-secops-term playbooks run NAME [--dry-run] [--ioc-id N]
+---
 
-secops-term hunt enqueue --ioc-id N --platform chronicle|vision_one
-secops-term hunt drain [--platform NAME] [--max N]
-secops-term hunt status
+## First-time setup
 
-secops-term ai query --target udm|tmv1 QUESTION
-secops-term ai status
+Run the config wizard once for each service you want to connect. Everything is interactive — no config files to hand-edit, no environment variables.
 
-secops-term config show
-secops-term config test PROVIDER
-secops-term config test-all
-secops-term config chronicle
-secops-term config vision-one
-secops-term config intel PROVIDER [--instance NAME]
+```powershell
+# Your SIEM / XDR
+secops-term config chronicle      # Chronicle UDM Search
+secops-term config vision-one     # Trend Micro Vision One
+secops-term config intel otx      # AlienVault OTX (needs API token)
+secops-term config intel greynoise    # GreyNoise (needs API key)
+secops-term config intel abuseipdb    # AbuseIPDB (needs API key)
+secops-term config intel virustotal   # VirusTotal Intelligence (needs API key)
+secops-term config intel nvd          # NVD CVEs (no key required)
+secops-term config intel abuse_ch     # abuse.ch feeds (no key required)
 
-secops-term audit verify
+# Verify everything is working
 secops-term doctor
-secops-term version
 ```
+
+API keys are stored in the **OS keyring** (Windows Credential Manager on Windows, macOS Keychain on macOS) — never written to disk in plain text.
+
+---
+
+## Daily use
+
+**Launch the TUI** (recommended for most workflows):
+```powershell
+secops-term tui
+```
+
+**Pull fresh threat intel from all configured providers:**
+```powershell
+secops-term intel pull
+secops-term intel pull --provider otx          # one provider only
+secops-term intel pull --since 2024-06-01      # only new since a date
+```
+
+**Search your IOC store:**
+```powershell
+secops-term intel list
+secops-term intel list --type ipv4
+secops-term intel list --search 185.220.101
+```
+
+**Ingest alerts:**
+```powershell
+secops-term alerts ingest
+secops-term alerts ingest --provider chronicle
+```
+
+**Queue and run retro hunts:**
+```powershell
+secops-term hunt enqueue --ioc-id 42 --platform chronicle
+secops-term hunt drain --platform chronicle --max 10
+secops-term hunt status
+```
+
+**Run a playbook:**
+```powershell
+secops-term playbooks list
+secops-term playbooks run high-conf-ioc-followup --dry-run
+secops-term playbooks run high-conf-ioc-followup --ioc-id 42
+```
+
+**Export IOCs as STIX 2.1:**
+```powershell
+secops-term intel export --format stix
+secops-term intel export --format stix --type cve --out cves.json
+```
+
+**Translate a question into a search query:**
+```powershell
+secops-term ai query --target udm "show me lateral movement from 10.0.0.0/8 in the last 7 days"
+secops-term ai query --target tmv1 "emails with suspicious attachments from external senders"
+```
+
+---
 
 ## Threat-intel providers
 
-| Provider | IOC types | Auth | Health probe |
-|----------|-----------|------|-------------|
-| `otx` | ipv4, ipv6, domain, url, sha256, sha1, md5, email, cve | Keyring `api_token` | `GET /users/me` (quota-free) |
-| `abuse_ch` | url, sha256, sha1, md5, ipv4 | Keyring `api_token` | ThreatFox `get_iocs` (1 day) |
-| `rss` | all types (IOC extraction) | None (feed URL in config) | Feed fetch + feedparser |
-| `virustotal` | sha256, sha1, md5 | Keyring `api_key` | `GET /api/v3/users/{owner}` (quota-free) |
-| `greynoise` | ipv4 | Keyring `api_key` | `GET /ping` |
-| `abuseipdb` | ipv4 | Keyring `api_key` | `GET /api/v2/check?ipAddress=8.8.8.8` |
-| `nvd` | cve | Keyring `api_key` (optional) | `GET /rest/json/cves/2.0?resultsPerPage=1` |
+| Provider | What you get | Key required |
+|----------|-------------|--------------|
+| `otx` | IPs, domains, URLs, hashes, CVEs from AlienVault OTX pulses | Yes — OTX API token |
+| `abuse_ch` | Malware hashes (MalwareBazaar), malicious URLs (URLhaus), IPs (Feodo, ThreatFox) | Yes — abuse.ch token |
+| `virustotal` | Malware file hashes from VT Intelligence | Yes — VT API key (Intelligence tier) |
+| `greynoise` | Malicious IPs from GreyNoise GNQL | Yes — GreyNoise API key |
+| `abuseipdb` | High-confidence malicious IPs from AbuseIPDB blacklist | Yes — AbuseIPDB API key |
+| `nvd` | CVEs above a configurable CVSS v3 threshold | No — public API |
+| `rss` | IOCs extracted from any RSS/Atom feed (BleepingComputer, Krebs, SANS ISC, etc.) | No |
 
-## STIX 2.1 export
-
+Configure any provider with:
 ```powershell
-# Export all IOCs as a STIX 2.1 bundle to stdout:
-secops-term intel export --format stix
-
-# Export only CVEs to a file:
-secops-term intel export --format stix --type cve --out bundle.json
-
-# Pipe to jq for inspection:
-secops-term intel export --format stix | jq '.objects[].type' | sort | uniq -c
+secops-term config intel PROVIDER
 ```
 
-IOC → STIX object mapping: ipv4→`ipv4-addr`, ipv6→`ipv6-addr`, domain→`domain-name`, url→`url`, sha256/sha1/md5→`file`, email→`email-addr`, cve→`vulnerability`. IDs are deterministic UUIDv5 (STIX namespace `00abedb4-aa42-466c-9c01-fed23315a9b7`) so the same IOC always produces the same STIX ID across exports.
-
-## Distributable builds (PyInstaller)
-
-Requires the `[build]` optional extra:
-
-```bash
-pip install "secops-term[build]"
-python scripts/build_dist.py
+Test a provider's connectivity at any time:
+```powershell
+secops-term config test-all
+secops-term config test otx
 ```
 
-The bundle lands at `dist/secops-term/`. The entry point binary is:
+---
 
-| Platform | Binary path |
+## Playbooks
+
+Playbooks are YAML files in `~/.secops-term/playbooks/`. Three example playbooks are included:
+
+| Playbook | What it does |
 |----------|-------------|
-| Windows  | `dist\secops-term\secops-term.exe` |
-| macOS    | `dist/secops-term/secops-term` |
-| Linux    | `dist/secops-term/secops-term` |
+| `daily-feed-pull` | Pull intel from all providers, notify Slack with a summary |
+| `high-conf-ioc-followup` | Enqueue retro hunts on Chronicle and Vision One for a high-confidence IOC |
+| `weekly-osint-roundup` | Pull from RSS providers, export STIX bundle, post to Teams |
 
-Build on the target platform — PyInstaller does not cross-compile. See `scripts/build_dist.py` and `secops_term.spec` for platform-specific signing notes.
+Run `secops-term playbooks init` to copy the examples into your data directory and start customising.
 
-## Quality gates
+---
+
+## Audit log
+
+Every action — intel pulls, alert ingests, playbook runs, config changes — is appended to a hash-chained JSONL audit log at `~/.secops-term/audit.jsonl`.
+
+The chain means tampering with any past entry breaks verification:
 
 ```powershell
-ruff check .
-ruff format --check .
-mypy secops_term
-pytest                              # unit + integration tests (968 tests)
-pytest -m security                  # security-primitive tests (separate CI job)
-pytest --cov=secops_term            # coverage
+secops-term audit verify         # walks the full chain and reports OK or the first break
 ```
 
-Coverage targets:
-- `core/url_guard.py`, `core/audit.py`, `playbooks/sandbox.py`, `core/secrets.py`, `core/redact.py` — **100%**.
-- Other `core/`, `intel/`, `playbooks/` — **>= 70%**.
+The log is also browsable in the TUI (`l` key).
 
-## Project layout
+---
 
+## Requirements
+
+| | Minimum |
+|---|---|
+| Python | 3.11+ |
+| OS | Windows 10 / 11, macOS 13+, Ubuntu 22.04+ |
+| Terminal | Windows Terminal, iTerm2, or any ANSI-capable terminal |
+| Keyring | Windows Credential Manager (built-in), macOS Keychain (built-in) |
+
+---
+
+## Upgrading
+
+```powershell
+pip install --upgrade secops-term
 ```
-secops_term/
-├── core/           # primitives: paths, secrets, audit, db, health, redact, url_guard, registry
-├── intel/          # providers (7), store, scraper, ioc, orchestrator, stix_export
-│   └── providers/  # otx, abuse_ch, rss, virustotal, greynoise, abuseipdb, nvd
-├── notifications/  # generic_json, slack, teams, orchestrator
-├── playbooks/      # schema, loader, engine, runners, sandbox, examples/
-├── alerts/         # normalize, dedup, ingest, types
-├── ai/             # bridge, clipboard, audit, selector, nlp_prompts, nlp_validators, nlp_query
-├── mcp/            # gate, tools, server (MCP Transport B)
-├── chronicle/      # client, factory, query_builder, retro_hunt
-├── trendmicro/     # vision_one, deep_security, factory
-├── ui/
-│   └── screens/    # DashboardScreen (stub), IntelScreen, RetroHuntsScreen,
-│                   # AlertsScreen, QueryScreen, PlaybooksScreen, ConfigScreen (stub)
-└── cli.py          # Typer entry point
-scripts/
-└── build_dist.py   # PyInstaller build helper
-secops_term.spec    # PyInstaller spec (directory-mode bundle)
-tests/              # 968 tests, mirrors secops_term/ structure
-DECISIONS.md        # running design log
-```
+
+Config and keyring secrets are preserved across upgrades.
+
+---
+
+## For contributors and maintainers
+
+See [`INSTALL.md`](INSTALL.md) for wheel builds, PyInstaller packaging, and corporate PyPI publishing.
+See [`DECISIONS.md`](DECISIONS.md) for the architectural design log.
+
+---
 
 ## License
 
