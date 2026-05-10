@@ -185,8 +185,8 @@ class SecretsManager:
             backend = kr.get_keyring()
         except Exception:
             return False
-        name = type(backend).__name__.lower()
-        if "fail" in name or "null" in name:
+        fqn = f"{type(backend).__module__}.{type(backend).__name__}".lower()
+        if "fail" in fqn or "null" in fqn:
             return False
         return True
 

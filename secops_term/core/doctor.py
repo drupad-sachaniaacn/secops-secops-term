@@ -151,7 +151,7 @@ def _check_keyring() -> CheckResult:
             ok=True,
             detail=f"unavailable: {exc!s}; encrypted-file fallback in effect",
         )
-    name = type(backend).__name__
+    name = f"{type(backend).__module__}.{type(backend).__name__}"
     if "fail" in name.lower() or "null" in name.lower():
         return CheckResult(
             "keyring",
