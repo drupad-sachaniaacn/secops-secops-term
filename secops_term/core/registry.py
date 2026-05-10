@@ -15,9 +15,6 @@ from __future__ import annotations
 import importlib
 import pkgutil
 from collections.abc import Callable, Iterable
-from typing import Generic, TypeVar
-
-T = TypeVar("T")
 
 
 class RegistryError(Exception):
@@ -32,7 +29,7 @@ class NotRegistered(RegistryError):
     """A name is not in the registry."""
 
 
-class Registry(Generic[T]):
+class Registry[T]:
     """Name-keyed mapping of registered classes.
 
     Concrete classes register themselves via the :meth:`register` decorator.
