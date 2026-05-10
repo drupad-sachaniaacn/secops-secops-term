@@ -7,7 +7,7 @@ name = "secops-term"
 version = "0.6.0"
 description = "Navigational TUI for SOC engineers — sits between SIEM and SOAR. Threat intel, retro hunts, alerts, playbooks, NLP to UDM/TMV1."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 license = "MIT"
 authors = [{ name = "SecOps Terminal" }]
 keywords = ["siem", "soar", "soc", "tui", "threat-intel", "chronicle", "vision-one"]
@@ -19,8 +19,7 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: MacOS",
     "Operating System :: POSIX :: Linux",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Security",
 ]
 dependencies = [
@@ -69,7 +68,7 @@ packages = ["secops_term"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = [
@@ -101,7 +100,7 @@ ignore = [
 quote-style = "double"
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.14"
 strict = true
 warn_unreachable = true
 warn_redundant_casts = true
