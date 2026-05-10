@@ -1,0 +1,28 @@
+# Daily pull of every configured intel provider, then a single notify
+# summarising what landed.
+#
+# Phase 5 ships `intel pull` as a CLI command, not as a playbook step
+# (api_call gating is locked read-only — see brief §13). This playbook
+# is therefore a stub at the engine level: the `notify` step is the
+# only operational piece, and the operator runs `secops-term intel pull`
+# beforehand (or wires this into a cron via Phase 6's scheduler when
+# it lands). The notify text is a heads-up so the channel knows the
+# daily pull happened.
+name: daily-feed-pull
+description: >-
+  Daily heads-up that the intel pull has been kicked off. Pair with
+  `secops-term intel pull` in a cron entry until Phase 6 ships the
+  scheduled-trigger worker.
+trigger:
+  type: scheduled
+  cron: "0 6 * * *"   # 06:00 UTC daily
+steps:
+  - id: announce
+    type: notify
+    channel: slack:soc-alerts
+    summary: "Daily intel pull starting"
+    message: >-
+      The daily threat-intel pull is underway across all configured
+      providers. Check the Threat Intel screen in a few minutes for
+      newly-landed IOCs.
+    severity: info

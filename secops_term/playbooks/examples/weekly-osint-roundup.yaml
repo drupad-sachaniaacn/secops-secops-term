@@ -1,0 +1,26 @@
+# Weekly summary of OSINT activity — a notify-only roundup that the
+# operator runs manually (or via cron) to push a digest of what the
+# intel pipeline has collected.
+#
+# Phase 5 keeps the digest static; Phase 6 may add a `summarize` step
+# that asks Claude to render a richer roundup via the AI bridge —
+# remember that AI output is display-only and may NOT gate a `when:`
+# (brief §7.5).
+name: weekly-osint-roundup
+description: >-
+  Weekly heads-up that OSINT roundup time has arrived. Run after the
+  Threat Intel screen's weekly review or wire into Phase 6's cron.
+trigger:
+  type: manual
+steps:
+  - id: roundup_notice
+    type: notify
+    channel: slack:soc-alerts
+    summary: "Weekly OSINT roundup"
+    message: >-
+      Time for the weekly OSINT roundup. Open the Threat Intel screen,
+      filter to the last 7 days, and triage anything new with confidence
+      >= 60. Reminder: open-source feeds (RSS, abuse.ch) come in
+      faster than commercial feeds, so weekly is a tighter loop than
+      monthly.
+    severity: info

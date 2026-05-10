@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+
+jobs:
+  qa:
+    name: QA (ruff . mypy . pytest)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: ruff lint
+        run: ruff check .
+
+      - name: ruff format check
+        run: ruff format --check .
+
+      - name: mypy type check
+        run: mypy secops_term
+
+      - name: pytest (unit + integration)
+        run: pytest --cov=secops_term --cov-report=term-missing -q
+
+  security:
+    name: Security primitives
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: pytest -m security
+        run: pytest -m security -v

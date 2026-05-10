@@ -1,0 +1,41 @@
+# When a high-confidence IOC lands, kick off retro hunts on Chronicle and
+# Vision One in parallel, then notify the SOC channel iff anything hit.
+#
+# Trigger: any new IOC with confidence >= 80.
+# Steps:
+#   1. retro_chronicle  — enqueue a 30-day Chronicle retro hunt for the IOC.
+#   2. retro_v1         — same, for Vision One.
+#   3. notify_if_hits   — `when:` gates this so we only ping the channel
+#                          when at least one platform returned >0 hits.
+#                          (NOTE: enqueueing is async — the hits referenced
+#                          here are the queue-side acknowledgement, not the
+#                          actual run result. A future Phase 6 worker will
+#                          surface real-hit counts back through `steps.*`.)
+name: high-conf-ioc-followup
+description: >-
+  On a new high-confidence IOC, retro-hunt across Chronicle and V1, then
+  notify the SOC channel if anything hits.
+trigger:
+  type: ioc_added
+  filter:
+    confidence_gte: 80
+steps:
+  - id: retro_chronicle
+    type: retro_hunt
+    platform: chronicle
+    lookback_days: 30
+  - id: retro_v1
+    type: retro_hunt
+    platform: vision_one
+    lookback_days: 30
+  - id: notify_if_hits
+    type: notify
+    when: "{{ steps.retro_chronicle.status == 'queued' or steps.retro_v1.status == 'queued' }}"
+    channel: slack:soc-alerts
+    summary: "Retro hunt queued: {{ ioc.value }}"
+    message: >-
+      A new high-confidence IOC ({{ ioc.value }}, type {{ ioc.type }})
+      triggered retro hunts on Chronicle (job {{ steps.retro_chronicle.job_id }})
+      and Vision One (job {{ steps.retro_v1.job_id }}). Review the
+      Retro Hunts screen for results.
+    severity: warn
