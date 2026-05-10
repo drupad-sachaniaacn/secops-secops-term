@@ -6,23 +6,18 @@
 
 ## Quick install (team standard)
 
-```powershell
-pip install secops-term
-```
-
-Or from a wheel file shared by the team:
+Get the `.whl` file from your team's shared drive / Teams channel / artifact store, then:
 
 ```powershell
-pip install secops_term-0.6.0-py3-none-any.whl
-```
-
-Or directly from the corporate git repo:
-
-```powershell
-pip install git+https://your-corp-git.example.com/secops/secops-term.git
+pip install .\path\to\secops_term-0.6.0-py3-none-any.whl
 ```
 
 That is all. No `git clone`, no virtual environment setup, no config files to hand-edit.
+
+> **Why a wheel and not `pip install git+https://...`?**  
+> Corporate git repos usually require authentication that pip cannot negotiate
+> automatically. The wheel is a self-contained archive — no network call to the
+> git server at install time, works offline, installs in seconds.
 
 ---
 

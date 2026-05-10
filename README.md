@@ -52,23 +52,23 @@ Navigate with single key presses:
 
 ## Install
 
-```powershell
-pip install secops-term
-```
-
-Or from a wheel file:
+**Recommended for team distribution — install from the wheel file:**
 
 ```powershell
-pip install secops_term-0.6.0-py3-none-any.whl
+pip install .\dist\secops_term-0.6.0-py3-none-any.whl
 ```
 
-Or directly from the repository:
+Drop the `.whl` from `dist\` on a shared drive, Teams channel, or internal artifact store and teammates install it the same way.
+
+To build a fresh wheel from the repo (maintainers only):
 
 ```powershell
-pip install git+https://your-corp-git.example.com/secops/secops-term.git
+pip install build
+python -m build
+# produces dist\secops_term-0.6.0-py3-none-any.whl
 ```
 
-Requires Python 3.11 or later. No other setup needed.
+Requires Python 3.14 or later. No other setup needed.
 
 ---
 
