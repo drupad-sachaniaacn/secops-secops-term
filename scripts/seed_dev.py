@@ -83,7 +83,7 @@ if _VENV_PYTHON.exists() and Path(sys.executable).resolve() != _VENV_PYTHON.reso
             f"[seed] WARNING: venv Python is broken ({_err}).\n"
             f"[seed] Rebuild the venv with:\n"
             f"[seed]   python -m venv .venv --clear\n"
-            f"[seed]   .venv\\Scripts\\pip install -e \".[dev]\"\n"
+            f'[seed]   .venv\\Scripts\\pip install -e ".[dev]"\n'
             f"[seed] Then re-run this script.",
             flush=True,
         )
@@ -248,7 +248,9 @@ def _seed_keyring() -> None:
             print(f"   {service}  [{field}]")
         print("   [!]  These are placeholder values -- replace with real keys for live pulls.")
     except Exception as exc:
-        print(f"   [!]  Keyring unavailable ({exc}) — skipping. Run providers with real keys later.")
+        print(
+            f"   [!]  Keyring unavailable ({exc}) — skipping. Run providers with real keys later."
+        )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
