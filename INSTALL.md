@@ -1,29 +1,99 @@
 # SecOps Terminal — Installation Guide
 
-> **v0.6.0** · Python 3.11 + · Windows / macOS / Linux
+> **v0.6.0** · Python 3.14+ · Windows / macOS / Linux
 
 ---
 
-## Quick install (team standard)
+## How to get the wheel file
 
-Get the `.whl` file from your team's shared drive / Teams channel / artifact store, then:
+The wheel (`secops_term-0.6.0-py3-none-any.whl`) is the release artifact.
+Build it once, distribute it to the team.
 
 ```powershell
-pip install .\path\to\secops_term-0.6.0-py3-none-any.whl
+# From the repo root (maintainer machine, one-time per release):
+cd C:\path\to\AutoTUI
+.venv\Scripts\python -m build --wheel
+# Output: dist\secops_term-0.6.0-py3-none-any.whl
 ```
 
-That is all. No `git clone`, no virtual environment setup, no config files to hand-edit.
-
-> **Why a wheel and not `pip install git+https://...`?**  
-> Corporate git repos usually require authentication that pip cannot negotiate
-> automatically. The wheel is a self-contained archive — no network call to the
-> git server at install time, works offline, installs in seconds.
+Then pick one of the three distribution methods below.
 
 ---
 
-## First-time setup (run once per machine)
+## Method A — Shared drive / Teams file share (simplest)
 
-After `pip install`, run the interactive config wizard for each service you use:
+1. Copy `dist\secops_term-0.6.0-py3-none-any.whl` to a shared location
+   (Teams Files tab, SharePoint, network share, OneDrive, etc.)
+
+2. Each teammate downloads the file to their machine (e.g. `Downloads\`)
+
+3. Install from the folder where the file was saved:
+
+```powershell
+# Open a terminal in the folder containing the .whl
+cd "$env:USERPROFILE\Downloads"
+pip install secops_term-0.6.0-py3-none-any.whl
+```
+
+> **Common mistake:** running `pip install .\dist\secops_term-0.6.0-py3-none-any.whl`
+> only works from inside the AutoTUI repo root. Once the file is shared, install
+> from wherever you downloaded it — no leading path needed if you `cd` there first.
+
+---
+
+## Method B — Internal PyPI server (best for ongoing rollouts)
+
+Run this once on any machine the team can reach (your workstation, a jump box, a CI server):
+
+```powershell
+pip install pypiserver
+pypi-server run -p 8080 C:\path\to\AutoTUI\dist
+```
+
+Teammates install from anywhere on the network — no file copy needed:
+
+```powershell
+pip install --extra-index-url http://HOSTNAME:8080/simple/ secops-term
+```
+
+Upgrading is then just:
+
+```powershell
+pip install --upgrade --extra-index-url http://HOSTNAME:8080/simple/ secops-term
+```
+
+> Replace `HOSTNAME` with the machine name or IP of the server running pypi-server.
+> The `scripts\serve_packages.py` helper automates this (see below).
+
+### Automated server script
+
+```powershell
+# Start the package server (keeps running until Ctrl+C):
+python scripts\serve_packages.py
+
+# Override host / port if needed:
+python scripts\serve_packages.py --host 0.0.0.0 --port 9090
+```
+
+---
+
+## Method C — Standalone executable (no Python required)
+
+For machines that don't have Python installed:
+
+```powershell
+# Build a self-contained .exe (maintainer machine):
+.venv\Scripts\pip install "secops-term[build]"
+.venv\Scripts\python scripts\build_dist.py
+
+# Result: dist\secops-term\secops-term.exe
+# Zip the entire dist\secops-term\ folder and share it.
+# No installer, no Python, no pip needed on the target machine.
+```
+
+---
+
+## First-time setup (run once per machine, after installing)
 
 ```powershell
 # Chronicle UDM Search
@@ -45,7 +115,7 @@ secops-term doctor
 ```
 
 Secrets are stored in the **OS keyring** (Windows Credential Manager on Windows,
-macOS Keychain on macOS) — never in files on disk.
+macOS Keychain on macOS) — never written to disk in plain text.
 
 ---
 
@@ -65,13 +135,14 @@ secops-term audit verify               # verify the hash-chained audit log
 ## Upgrading
 
 ```powershell
-pip install --upgrade secops-term
+# Method A (wheel file) — download the new wheel, then:
+pip install secops_term-0.6.1-py3-none-any.whl
 
-# Or from a new wheel file:
-pip install --upgrade secops_term-0.6.1-py3-none-any.whl
+# Method B (PyPI server) — from anywhere:
+pip install --upgrade --extra-index-url http://HOSTNAME:8080/simple/ secops-term
 ```
 
-Your config and keyring secrets are preserved across upgrades.
+Config and keyring secrets are preserved across upgrades.
 
 ---
 
@@ -87,48 +158,11 @@ rm -rf ~/.secops-term                                   # macOS / Linux
 
 ---
 
-## Building a release wheel (maintainers only)
-
-```powershell
-# From the repo root, with dev deps installed:
-pip install build
-python -m build
-
-# Produces:
-#   dist/secops_term-0.6.0-py3-none-any.whl   ← share this with the team
-#   dist/secops_term-0.6.0.tar.gz              ← source archive
-```
-
-Upload to your corporate PyPI:
-
-```powershell
-pip install twine
-twine upload --repository-url https://your-corp-pypi/simple/ dist/*
-```
-
-Or drop the `.whl` on a shared drive / Teams / internal artifact store.
-
----
-
-## Building a standalone binary (no Python required)
-
-For machines without Python installed, build a self-contained executable:
-
-```powershell
-pip install "secops-term[build]"
-python scripts/build_dist.py
-
-# Result: dist\secops-term\secops-term.exe (Windows)
-# Zip and distribute — no installer, no Python, no pip needed.
-```
-
----
-
 ## System requirements
 
 | Requirement | Minimum |
 |---|---|
-| Python | 3.11+ |
+| Python | 3.14+ |
 | OS | Windows 10+, macOS 13+, Ubuntu 22.04+ |
 | Terminal | Windows Terminal, iTerm2, any ANSI-capable terminal |
 | Keyring | Windows Credential Manager (built-in) |

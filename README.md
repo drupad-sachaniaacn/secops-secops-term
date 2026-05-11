@@ -52,23 +52,27 @@ Navigate with single key presses:
 
 ## Install
 
-**Recommended for team distribution — install from the wheel file:**
+Get the `.whl` from whoever manages releases, download it, then install from the folder you saved it to:
 
 ```powershell
-pip install .\dist\secops_term-0.6.0-py3-none-any.whl
+cd "$env:USERPROFILE\Downloads"
+pip install secops_term-0.6.0-py3-none-any.whl
 ```
 
-Drop the `.whl` from `dist\` on a shared drive, Teams channel, or internal artifact store and teammates install it the same way.
-
-To build a fresh wheel from the repo (maintainers only):
+For team-wide rollouts, a one-liner internal PyPI server lets everyone install and upgrade without file copying:
 
 ```powershell
-pip install build
-python -m build
-# produces dist\secops_term-0.6.0-py3-none-any.whl
+# On the server / maintainer machine:
+pip install pypiserver
+python scripts\serve_packages.py      # serves dist\ on port 8080
+
+# Teammates (from anywhere on the network):
+pip install --extra-index-url http://HOSTNAME:8080/simple/ secops-term
 ```
 
-Requires Python 3.14 or later. No other setup needed.
+See [`INSTALL.md`](INSTALL.md) for all three distribution methods and the standalone `.exe` build.
+
+Requires Python 3.14 or later.
 
 ---
 
