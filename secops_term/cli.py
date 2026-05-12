@@ -22,8 +22,20 @@ Phase 0 + Phase 1 surface:
 from __future__ import annotations
 
 import asyncio
+import os
+import sys
 from datetime import datetime
 from typing import Any
+
+# Windows cp1252 terminals can't render Unicode box-drawing / arrow characters
+# that Rich uses in help text and tables.  Force UTF-8 output before any import
+# of rich or typer so the codec is set before their first write.
+if sys.platform == "win32" and os.environ.get("PYTHONUTF8") != "1":
+    os.environ["PYTHONUTF8"] = "1"
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import typer
 from rich.console import Console
