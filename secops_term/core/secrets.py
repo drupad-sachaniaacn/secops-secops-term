@@ -71,6 +71,7 @@ class CorruptSecretsFile(SecretsError):
 class SecretBackend(Enum):
     KEYRING = "keyring"
     ENCRYPTED_FILE = "encrypted_file"
+    INFISICAL = "infisical"
 
 
 class PassphraseProvider:
@@ -122,9 +123,19 @@ class SecretsManager:
     # Public API
 
     def initialize(self) -> SecretBackend:
-        """Pick a backend. Raises if strict mode and keyring is unavailable."""
+        """Pick a backend. Raises if strict mode and keyring is unavailable.
+
+        Priority order:
+        1. Infisical — when ``INFISICAL_TOKEN`` + ``INFISICAL_PROJECT_ID`` env
+           vars are present (server / Codespaces deployment).
+        2. OS keyring — Windows Credential Manager / macOS Keychain.
+        3. Encrypted file fallback — ``~/.secops-term/secrets.enc``.
+        """
         with self._lock:
             if self._backend is not None:
+                return self._backend
+            if os.environ.get("INFISICAL_TOKEN") and os.environ.get("INFISICAL_PROJECT_ID"):
+                self._backend = SecretBackend.INFISICAL
                 return self._backend
             if self._keyring_works():
                 self._backend = SecretBackend.KEYRING
@@ -139,6 +150,12 @@ class SecretsManager:
         backend = self.initialize()
         if backend is SecretBackend.KEYRING:
             self._keyring_set(provider, instance, field_name, value)
+        elif backend is SecretBackend.INFISICAL:
+            raise SecretsError(
+                "Infisical backend is read-only from this tool. "
+                "Create or update secrets in the Infisical dashboard "
+                f"(secret name: {_infisical_secret_name(provider, instance, field_name)})."
+            )
         else:
             self._file_set(provider, instance, field_name, value)
 
@@ -146,6 +163,8 @@ class SecretsManager:
         backend = self.initialize()
         if backend is SecretBackend.KEYRING:
             value = self._keyring_get(provider, instance, field_name)
+        elif backend is SecretBackend.INFISICAL:
+            value = self._infisical_get(provider, instance, field_name)
         else:
             value = self._file_get(provider, instance, field_name)
         if value is not None:
@@ -156,6 +175,8 @@ class SecretsManager:
         backend = self.initialize()
         if backend is SecretBackend.KEYRING:
             self._keyring_delete(provider, instance, field_name)
+        elif backend is SecretBackend.INFISICAL:
+            raise SecretsError("Infisical backend: delete secrets via the Infisical dashboard.")
         else:
             self._file_delete(provider, instance, field_name)
 
@@ -209,6 +230,57 @@ class SecretsManager:
         # entry is already absent, which is the desired post-condition.
         with contextlib.suppress(Exception):
             kr.delete_password(self._service_name(provider, instance), field_name)
+
+    # Infisical backend
+
+    def _infisical_get(self, provider: str, instance: str, field_name: str) -> str | None:
+        """Fetch a secret from Infisical using the REST API.
+
+        Secret naming convention (create these in the Infisical dashboard):
+            SECOPS_TERM__{PROVIDER}__{INSTANCE}__{FIELD}
+        e.g. ``SECOPS_TERM__CHRONICLE__DEFAULT__SERVICE_ACCOUNT_JSON``
+
+        Environment variables read:
+            INFISICAL_TOKEN        — service token (required)
+            INFISICAL_PROJECT_ID   — project / workspace ID (required)
+            INFISICAL_ENVIRONMENT  — environment slug (default: production)
+            INFISICAL_SECRET_PATH  — secret path (default: /)
+            INFISICAL_HOST         — self-hosted URL (default: https://app.infisical.com)
+        """
+        secret_name = _infisical_secret_name(provider, instance, field_name)
+        cache_key = f"infisical:{secret_name}"
+        with self._lock:
+            if cache_key in self._mem_cache:
+                return self._mem_cache[cache_key]
+
+        token = os.environ.get("INFISICAL_TOKEN", "")
+        project_id = os.environ.get("INFISICAL_PROJECT_ID", "")
+        environment = os.environ.get("INFISICAL_ENVIRONMENT", "production")
+        secret_path = os.environ.get("INFISICAL_SECRET_PATH", "/")
+        host = os.environ.get("INFISICAL_HOST", "https://app.infisical.com").rstrip("/")
+
+        try:
+            import httpx
+
+            resp = httpx.get(
+                f"{host}/api/v3/secrets/raw/{secret_name}",
+                params={
+                    "workspaceId": project_id,
+                    "environment": environment,
+                    "secretPath": secret_path,
+                },
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0,
+            )
+            if resp.status_code == 200:
+                value: str | None = resp.json().get("secret", {}).get("secretValue")
+                if value is not None:
+                    with self._lock:
+                        self._mem_cache[cache_key] = value
+                return value
+            return None
+        except Exception:
+            return None
 
     # Encrypted-file backend
 
@@ -410,6 +482,16 @@ def _argon2id_raw(
         type=Type.ID,
     )
     return raw
+
+
+def _infisical_secret_name(provider: str, instance: str, field_name: str) -> str:
+    """Return the canonical Infisical secret name for a given secops-term key.
+
+    Format: ``SECOPS_TERM__{PROVIDER}__{INSTANCE}__{FIELD}`` (uppercase,
+    hyphens and dots replaced with underscores).
+    """
+    parts = f"{provider}__{instance}__{field_name}"
+    return "SECOPS_TERM__" + parts.upper().replace("-", "_").replace(".", "_")
 
 
 # Module-level singleton

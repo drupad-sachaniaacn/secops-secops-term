@@ -1,0 +1,41 @@
+{
+  "name": "SecOps Terminal",
+  "image": "mcr.microsoft.com/devcontainers/python:3.14-bookworm",
+
+  // Install the package and dev dependencies automatically when the
+  // Codespace is created. Team members open the repo and it just works.
+  "postCreateCommand": "pip install -e '.[dev]' && secops-term doctor",
+
+  // Infisical credentials are set once as Codespace repository secrets
+  // (repo Settings → Secrets and variables → Codespaces).
+  // GitHub injects them here automatically — no manual step per user.
+  "remoteEnv": {
+    "INFISICAL_TOKEN": "${localEnv:INFISICAL_TOKEN}",
+    "INFISICAL_PROJECT_ID": "${localEnv:INFISICAL_PROJECT_ID}",
+    "INFISICAL_ENVIRONMENT": "${localEnv:INFISICAL_ENVIRONMENT}",
+    "INFISICAL_HOST": "${localEnv:INFISICAL_HOST}"
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.debugpy"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "editor.formatOnSave": true,
+        "[python]": {
+          "editor.defaultFormatter": "ms-python.python"
+        }
+      }
+    }
+  },
+
+  // Forward no ports by default — the TUI runs entirely in the terminal.
+  "forwardPorts": [],
+
+  "remoteUser": "vscode"
+}
